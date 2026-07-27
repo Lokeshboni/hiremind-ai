@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { Brain, Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
+export const dynamic = 'force-dynamic';
+
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(1, 'Password is required'),
