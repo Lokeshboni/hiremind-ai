@@ -12,66 +12,52 @@ export async function GET() {
     }
 
     const { id, role } = session.user;
+    let companyId: string | null = null;
 
-    // Retrieve Recruiter profile and linked company
-    const recruiter = await prisma.recruiter.findUnique({
-      where: { userId: id },
-    });
-
-    if (!recruiter && role !== 'ADMIN') {
-      return NextResponse.json({ message: 'Recruiter profile not found.' }, { status: 404 });
+    if (role === 'RECRUITER') {
+      const recruiter = await prisma.recruiter.findUnique({
+        where: { userId: id },
+      });
+      companyId = recruiter?.companyId || null;
     }
 
-    const companyId = recruiter?.companyId;
+    // 1. Fetch key recruiter stats
+    const totalJobs = await prisma.job.count({
+      where: role === 'ADMIN' ? {} : { companyId: companyId || 'no-company' }
+    });
 
-    // Filter jobs based on role: admins see all, recruiters see their company's jobs
-    const jobFilter = role === 'ADMIN' ? {} : { companyId: companyId || 'no-company' };
-
-    // Fetch aggregate metrics
-    const totalJobs = await prisma.job.count({ where: jobFilter });
-    
     const totalApplications = await prisma.application.count({
-      where: role === 'ADMIN' ? {} : {
-        job: { companyId: companyId || 'no-company' }
-      }
+      where: role === 'ADMIN' ? {} : { job: { companyId: companyId || 'no-company' } }
     });
 
-    // Unique Candidates count
-    const uniqueCandidates = await prisma.candidateProfile.count({
-      where: role === 'ADMIN' ? {} : {
-        applications: {
-          some: {
-            job: { companyId: companyId || 'no-company' }
-          }
-        }
-      }
+    // Unique candidates counts
+    const candidatesGroup = await prisma.application.groupBy({
+      by: ['candidateId'],
+      where: role === 'ADMIN' ? {} : { job: { companyId: companyId || 'no-company' } }
     });
+    const uniqueCandidates = candidatesGroup.length;
 
-    // Calculate Average Match Score
-    const scoreAggregates = await prisma.application.aggregate({
-      where: role === 'ADMIN' ? {} : {
-        job: { companyId: companyId || 'no-company' }
-      },
+    // Average match score
+    const avgScoreResult = await prisma.application.aggregate({
       _avg: {
         matchScore: true
-      }
-    });
-
-    const averageMatchScore = Math.round(scoreAggregates._avg.matchScore || 0);
-
-    // Fetch Recent Applications with Candidate details
-    const recentApplications = await prisma.application.findMany({
-      where: role === 'ADMIN' ? {} : {
-        job: { companyId: companyId || 'no-company' }
       },
+      where: role === 'ADMIN' ? {} : { job: { companyId: companyId || 'no-company' } }
+    });
+    const averageMatchScore = avgScoreResult._avg.matchScore ? Math.round(avgScoreResult._avg.matchScore) : 0;
+
+    // 2. Fetch recent applications
+    const recentApplications = await prisma.application.findMany({
+      where: role === 'ADMIN' ? {} : { job: { companyId: companyId || 'no-company' } },
       include: {
         candidate: {
           include: { user: true }
         },
-        job: true,
-        analysis: true,
+        job: true
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: {
+        createdAt: 'desc',
+      },
       take: 6,
     });
 
@@ -116,17 +102,17 @@ export async function GET() {
     });
 
     const funnelData = [
-      { name: 'Applied', value: pendingCount + screeningCount + shortlistedCount + rejectedCount || 24 },
-      { name: 'Screened', value: screeningCount + shortlistedCount || 16 },
-      { name: 'Shortlisted', value: shortlistedCount || 8 },
-      { name: 'Hired', value: Math.round(shortlistedCount * 0.4) || 3 }
+      { stage: 'Applied', count: pendingCount + screeningCount + shortlistedCount + rejectedCount },
+      { stage: 'Screened', count: screeningCount + shortlistedCount },
+      { stage: 'Shortlisted', count: shortlistedCount },
+      { stage: 'Hired', count: Math.round(shortlistedCount * 0.4) }
     ];
 
-    // Chart 3: Skill Distribution (Top Keywords parsed)
+    // Chart 3: Skill match density metrics
     const skillDistribution = [
       { skill: 'React', density: 85 },
-      { skill: 'Next.js', density: 90 },
-      { skill: 'TypeScript', density: 75 },
+      { skill: 'Next.js', density: 75 },
+      { skill: 'TypeScript', density: 70 },
       { skill: 'Node.js', density: 60 },
       { skill: 'PostgreSQL', density: 65 },
       { skill: 'AWS', density: 40 }
@@ -146,7 +132,7 @@ export async function GET() {
         jobTitle: app.job.title,
         status: app.status,
         matchScore: app.matchScore,
-        skills: app.candidate.skills ? app.candidate.skills.split(',').map(s => s.trim()).filter(s => s.length > 0) : [],
+        skills: app.candidate.skills,
         location: app.candidate.location || 'Unknown',
         headline: app.candidate.headline || 'Developer',
         createdAt: app.createdAt

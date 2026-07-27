@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// GET: Admin stats overview metrics & user/job management listing
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -11,16 +12,16 @@ export async function GET() {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
-    // Retrieve all Users in the system
+    // Retrieve all Users registered in the system
     const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
         createdAt: true,
-      }
+      },
+      orderBy: { createdAt: 'desc' },
     });
 
     // Retrieve all Jobs published in the system
@@ -38,12 +39,6 @@ export async function GET() {
     const totalApplications = await prisma.application.count();
     const totalAnalysis = await prisma.aIAnalysis.count();
 
-    const parsedJobs = jobs.map(job => ({
-      ...job,
-      requirements: job.requirements ? JSON.parse(job.requirements) : [],
-      skills: job.skills ? JSON.parse(job.skills) : []
-    }));
-
     return NextResponse.json({
       stats: {
         totalUsers,
@@ -52,7 +47,7 @@ export async function GET() {
         totalAnalysis
       },
       users,
-      jobs: parsedJobs
+      jobs
     });
 
   } catch (error) {
@@ -61,6 +56,7 @@ export async function GET() {
   }
 }
 
+// DELETE: Admin hard-delete a user or job listing
 export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -70,36 +66,34 @@ export async function DELETE(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-    const jobId = searchParams.get('jobId');
+    const targetType = searchParams.get('type'); // 'user' or 'job'
+    const targetId = searchParams.get('id');
 
-    // Handle user deletion (spam cleanup)
-    if (userId) {
-      // Prevent admin from deleting themselves
-      if (userId === session.user.id) {
-        return NextResponse.json({ message: 'Cannot delete your own administrator account.' }, { status: 400 });
+    if (!targetType || !targetId) {
+      return NextResponse.json({ message: 'Missing target type or ID parameters.' }, { status: 400 });
+    }
+
+    if (targetType === 'user') {
+      // Prevent deleting self
+      if (targetId === session.user.id) {
+        return NextResponse.json({ message: 'Cannot self-delete logged-in admin user.' }, { status: 400 });
       }
 
       await prisma.user.delete({
-        where: { id: userId }
+        where: { id: targetId },
       });
+      return NextResponse.json({ message: 'User record deleted successfully.' });
 
-      return NextResponse.json({ message: 'User account and profile deleted successfully.' });
-    }
-
-    // Handle job deletion (spam listing cleanup)
-    if (jobId) {
+    } else if (targetType === 'job') {
       await prisma.job.delete({
-        where: { id: jobId }
+        where: { id: targetId },
       });
-
-      return NextResponse.json({ message: 'Job posting deleted successfully.' });
+      return NextResponse.json({ message: 'Job vacancy deleted successfully.' });
     }
 
-    return NextResponse.json({ message: 'Missing userId or jobId parameter.' }, { status: 400 });
-
+    return NextResponse.json({ message: 'Unsupported target operation type.' }, { status: 400 });
   } catch (error) {
     console.error('Admin DELETE Error:', error);
-    return NextResponse.json({ message: 'Failed to delete: ' + (error as Error).message }, { status: 500 });
+    return NextResponse.json({ message: 'Deletion failed: ' + (error as Error).message }, { status: 500 });
   }
 }

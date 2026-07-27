@@ -1,19 +1,17 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Clearing database tables...');
-  
-  // Try deleting in order to prevent foreign key errors in SQLite
-  try { await prisma.aIAnalysis.deleteMany({}); } catch {}
-  try { await prisma.application.deleteMany({}); } catch {}
-  try { await prisma.job.deleteMany({}); } catch {}
-  try { await prisma.recruiter.deleteMany({}); } catch {}
-  try { await prisma.candidateProfile.deleteMany({}); } catch {}
-  try { await prisma.company.deleteMany({}); } catch {}
-  try { await prisma.user.deleteMany({}); } catch {}
+  await prisma.aIAnalysis.deleteMany({});
+  await prisma.application.deleteMany({});
+  await prisma.job.deleteMany({});
+  await prisma.recruiter.deleteMany({});
+  await prisma.candidateProfile.deleteMany({});
+  await prisma.company.deleteMany({});
+  await prisma.user.deleteMany({});
 
   console.log('Generating password hashes...');
   const defaultPassword = await bcrypt.hash('password123', 10);
@@ -52,7 +50,7 @@ async function main() {
       name: 'System Admin',
       email: 'admin@hiremind.ai',
       password: defaultPassword,
-      role: 'ADMIN',
+      role: Role.ADMIN,
     }
   });
 
@@ -63,7 +61,7 @@ async function main() {
       name: 'Marcus Aurelius',
       email: 'marcus@stripe.com',
       password: defaultPassword,
-      role: 'RECRUITER',
+      role: Role.RECRUITER,
     }
   });
 
@@ -83,7 +81,7 @@ async function main() {
       name: 'Diana Prince',
       email: 'diana@supabase.io',
       password: defaultPassword,
-      role: 'RECRUITER',
+      role: Role.RECRUITER,
     }
   });
 
@@ -103,7 +101,7 @@ async function main() {
       name: 'Alex Mercer',
       email: 'alex.mercer@example.com',
       password: defaultPassword,
-      role: 'CANDIDATE',
+      role: Role.CANDIDATE,
     }
   });
 
@@ -113,7 +111,7 @@ async function main() {
       userId: cand1User.id,
       headline: 'Senior Full Stack Engineer | React & Node Architect',
       location: 'San Francisco, CA',
-      skills: 'React, Next.js, TypeScript, Node.js, PostgreSQL, AWS, Docker, REST APIs',
+      skills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'PostgreSQL', 'AWS', 'Docker', 'REST APIs'],
       linkedin: 'https://linkedin.com/in/alexmercer',
       github: 'https://github.com/alexmercer',
       portfolio: 'https://alexmercer.dev',
@@ -148,7 +146,7 @@ async function main() {
       name: 'Sarah Connor',
       email: 'sarah.connor@example.com',
       password: defaultPassword,
-      role: 'CANDIDATE',
+      role: Role.CANDIDATE,
     }
   });
 
@@ -158,7 +156,7 @@ async function main() {
       userId: cand2User.id,
       headline: 'DevOps Lead & Cloud Automation Specialist',
       location: 'Austin, TX',
-      skills: 'AWS, Kubernetes, Docker, Terraform, CI/CD, Python',
+      skills: ['AWS', 'Kubernetes', 'Docker', 'Terraform', 'CI/CD', 'Python'],
       linkedin: 'https://linkedin.com/in/sarahconnor',
       github: 'https://github.com/sarahconnor',
       experience: JSON.stringify([
@@ -187,12 +185,12 @@ async function main() {
       id: 'job-uuid-1111',
       title: 'Senior Next.js Developer',
       description: 'We are seeking a senior frontend wizard to lead our billing portal team. You will write robust, high-speed interfaces using Next.js, TypeScript, and tailwind variables.',
-      requirements: JSON.stringify([
+      requirements: [
         'Lead development of new billing interfaces and custom graphs',
         'Collaborate with PMs to refine checkout dashboards',
         'Optimize page speed, bundle sizes and image compression assets'
-      ]),
-      skills: JSON.stringify(['React', 'Next.js', 'TypeScript', 'Tailwind CSS', 'NextAuth.js', 'Recharts']),
+      ],
+      skills: ['React', 'Next.js', 'TypeScript', 'Tailwind CSS', 'NextAuth.js', 'Recharts'],
       experience: '5+ years',
       location: 'San Francisco, CA',
       salary: '$150,000 - $185,000',
@@ -208,12 +206,12 @@ async function main() {
       id: 'job-uuid-2222',
       title: 'Cloud DevOps Architect',
       description: 'Supabase is expanding infrastructure. We need an architect proficient in scaling Kubernetes, implementing unified secret controls, and establishing automated terraform scripts.',
-      requirements: JSON.stringify([
+      requirements: [
         'Design and deploy AWS and GCP multi-region nodes',
         'Establish automated deployment scripts using GitHub Actions',
         'Ensure system safety, rate limiting protocols and metrics logging'
-      ]),
-      skills: JSON.stringify(['AWS', 'Kubernetes', 'Docker', 'Terraform', 'CI/CD', 'Python']),
+      ],
+      skills: ['AWS', 'Kubernetes', 'Docker', 'Terraform', 'CI/CD', 'Python'],
       experience: '4+ years',
       location: 'Remote',
       salary: '$160,000 - $200,000',
@@ -246,23 +244,23 @@ async function main() {
       id: 'analysis-uuid-1111',
       applicationId: app1.id,
       score: 82,
-      strengths: JSON.stringify([
+      strengths: [
         'Deep competencies in React, Next.js, and TypeScript',
         'Direct experience optimizing SaaS dashboards and performance metrics',
         'Strong back-end knowledge with Node.js and Postgres databases'
-      ]),
-      weaknesses: JSON.stringify([
+      ],
+      weaknesses: [
         'No listed experience using Prisma ORM or NextAuth modules directly',
         'Slightly shorter tenure under 2 years at previous position'
-      ]),
-      missingSkills: JSON.stringify(['NextAuth.js', 'Recharts']),
+      ],
+      missingSkills: ['NextAuth.js', 'Recharts'],
       recommendation: 'SHORTLIST',
       atsScore: 78,
-      questions: JSON.stringify([
+      questions: [
         'Explain how you would optimize database queries inside a Next.js serverless route.',
         'Describe your experience deploying Next.js pages utilizing edge runtimes.',
         'Have you worked with client charting packages like Recharts?'
-      ]),
+      ],
       jsonResponse: JSON.stringify({
         score: 82,
         skillsMatched: ['React', 'Next.js', 'TypeScript', 'Node.js', 'PostgreSQL'],
@@ -302,21 +300,21 @@ async function main() {
       id: 'analysis-uuid-2222',
       applicationId: app2.id,
       score: 95,
-      strengths: JSON.stringify([
+      strengths: [
         'Complete alignment with the Terraform, Kubernetes, and AWS infrastructure stack',
         'Direct experience designing and maintaining multi-region cloud networks',
         'Solid scripting foundation in Python and Linux bash automations'
-      ]),
-      weaknesses: JSON.stringify([
+      ],
+      weaknesses: [
         'Limited direct application development experience in React/Node'
-      ]),
-      missingSkills: JSON.stringify([]),
+      ],
+      missingSkills: [],
       recommendation: 'STRONG_BUY',
       atsScore: 92,
-      questions: JSON.stringify([
+      questions: [
         'How do you manage state lock file issues in multi-tenant Terraform scripts?',
         'Describe your strategy for migrating database clusters across AWS regions without downtime.'
-      ]),
+      ],
       jsonResponse: JSON.stringify({
         score: 95,
         skillsMatched: ['AWS', 'Kubernetes', 'Docker', 'Terraform', 'CI/CD', 'Python'],

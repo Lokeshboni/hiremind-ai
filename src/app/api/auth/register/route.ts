@@ -57,7 +57,7 @@ export async function POST(req: Request) {
           data: {
             userId: newUser.id,
             headline: 'Aspiring professional looking for opportunities',
-            skills: '',
+            skills: [],
           },
         });
       } else if (role === 'RECRUITER') {

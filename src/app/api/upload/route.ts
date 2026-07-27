@@ -69,7 +69,7 @@ export async function POST(req: Request) {
         data: {
           resumeUrl: relativeUrl,
           headline: parsedData.headline || undefined,
-          skills: parsedData.skills ? parsedData.skills.join(', ') : '',
+          skills: parsedData.skills || [],
           experience: JSON.stringify(parsedData.experience),
           education: JSON.stringify(parsedData.education),
         }

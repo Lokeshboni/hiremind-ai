@@ -49,39 +49,7 @@ export async function GET() {
         }
       });
 
-      if (profile) {
-        const parsedApplications = profile.applications.map(app => {
-          let parsedAnalysis = null;
-          if (app.analysis) {
-            parsedAnalysis = {
-              ...app.analysis,
-              strengths: app.analysis.strengths ? JSON.parse(app.analysis.strengths) : [],
-              weaknesses: app.analysis.weaknesses ? JSON.parse(app.analysis.weaknesses) : [],
-              missingSkills: app.analysis.missingSkills ? JSON.parse(app.analysis.missingSkills) : [],
-              questions: app.analysis.questions ? JSON.parse(app.analysis.questions) : []
-            };
-          }
-          const parsedJob = {
-            ...app.job,
-            requirements: app.job.requirements ? JSON.parse(app.job.requirements) : [],
-            skills: app.job.skills ? JSON.parse(app.job.skills) : []
-          };
-          return {
-            ...app,
-            analysis: parsedAnalysis,
-            job: parsedJob
-          };
-        });
-
-        const parsedProfile = {
-          ...profile,
-          skills: profile.skills ? profile.skills.split(',').map(s => s.trim()).filter(s => s.length > 0) : [],
-          applications: parsedApplications
-        };
-        return NextResponse.json({ role, profile: parsedProfile });
-      }
-
-      return NextResponse.json({ role, profile: null });
+      return NextResponse.json({ role, profile });
     } else if (role === 'RECRUITER') {
       const profile = await prisma.recruiter.findUnique({
         where: { userId: id },
@@ -117,23 +85,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: result.error.errors[0].message }, { status: 400 });
       }
 
-      const { skills, ...rest } = result.data;
-
       const updated = await prisma.candidateProfile.update({
         where: { userId: id },
-        data: {
-          ...rest,
-          skills: skills ? skills.join(', ') : undefined
-        },
+        data: result.data,
       });
 
-      return NextResponse.json({ 
-        message: 'Profile updated successfully', 
-        profile: {
-          ...updated,
-          skills: updated.skills ? updated.skills.split(',').map(s => s.trim()).filter(s => s.length > 0) : []
-        }
-      });
+      return NextResponse.json({ message: 'Profile updated successfully', profile: updated });
     } else if (role === 'RECRUITER') {
       const result = recruiterProfileSchema.safeParse(body);
       if (!result.success) {
@@ -150,7 +107,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: 'Recruiter profile not found.' }, { status: 404 });
       }
 
-      // Update Recruiter designation and transactional Company details
       const updated = await prisma.$transaction(async (tx) => {
         let companyId = profile.companyId;
 

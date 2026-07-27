@@ -37,36 +37,28 @@ export async function GET(req: Request) {
       }
     });
 
-    if (application) {
-      let parsedAnalysis = null;
-      if (application.analysis) {
-        parsedAnalysis = {
-          ...application.analysis,
-          strengths: application.analysis.strengths ? JSON.parse(application.analysis.strengths) : [],
-          weaknesses: application.analysis.weaknesses ? JSON.parse(application.analysis.weaknesses) : [],
-          missingSkills: application.analysis.missingSkills ? JSON.parse(application.analysis.missingSkills) : [],
-          questions: application.analysis.questions ? JSON.parse(application.analysis.questions) : []
-        };
-      }
-      const parsedJob = {
-        ...application.job,
-        requirements: application.job.requirements ? JSON.parse(application.job.requirements) : [],
-        skills: application.job.skills ? JSON.parse(application.job.skills) : []
-      };
-      const parsedCandidate = {
-        ...application.candidate,
-        skills: application.candidate.skills ? application.candidate.skills.split(',').map(s => s.trim()).filter(s => s.length > 0) : []
-      };
-      const parsedApp = {
-        ...application,
-        analysis: parsedAnalysis,
-        job: parsedJob,
-        candidate: parsedCandidate
-      };
-      return NextResponse.json({ application: parsedApp });
+    if (!application) {
+      return NextResponse.json({ message: 'Application record not found.' }, { status: 404 });
     }
 
-    return NextResponse.json({ message: 'Application record not found.' }, { status: 404 });
+    // Security check: candidates can only view their own applications, recruiters can view applications for their company
+    if (session.user.role === 'CANDIDATE') {
+      const candidateProfile = await prisma.candidateProfile.findUnique({
+        where: { userId: session.user.id }
+      });
+      if (application.candidateId !== candidateProfile?.id) {
+        return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+      }
+    } else if (session.user.role === 'RECRUITER') {
+      const recruiter = await prisma.recruiter.findUnique({
+        where: { userId: session.user.id }
+      });
+      if (application.job.companyId !== recruiter?.companyId) {
+        return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    return NextResponse.json({ application });
   } catch (error) {
     console.error('Fetch Application Detail Error:', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
@@ -163,14 +155,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Unable to process resume text. Please re-upload your resume.' }, { status: 400 });
     }
 
-    const reqs = job.requirements ? JSON.parse(job.requirements) : [];
-    const skillsArr = job.skills ? JSON.parse(job.skills) : [];
-
     const jobDescription = `Job Title: ${job.title}
 Company: ${job.company.name}
 Description: ${job.description}
-Requirements: ${reqs.join('; ')}
-Skills: ${skillsArr.join(', ')}
+Requirements: ${job.requirements.join('; ')}
+Skills: ${job.skills.join(', ')}
 Experience Required: ${job.experience}`;
     
     const analysis = await matchResumeAndJob(resumeText, jobDescription);
@@ -191,12 +180,12 @@ Experience Required: ${job.experience}`;
         data: {
           applicationId: app.id,
           score: analysis.score,
-          strengths: JSON.stringify(analysis.strengths),
-          weaknesses: JSON.stringify(analysis.weaknesses),
-          missingSkills: JSON.stringify(analysis.missingSkills),
+          strengths: analysis.strengths,
+          weaknesses: analysis.weaknesses,
+          missingSkills: analysis.missingSkills,
           recommendation: analysis.recommendation,
           atsScore: analysis.atsScore,
-          questions: JSON.stringify(analysis.interviewQuestions),
+          questions: analysis.interviewQuestions,
           jsonResponse: JSON.stringify(analysis),
         }
       });

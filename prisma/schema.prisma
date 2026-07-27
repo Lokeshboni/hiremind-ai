@@ -1,5 +1,5 @@
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -7,12 +7,18 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum Role {
+  CANDIDATE
+  RECRUITER
+  ADMIN
+}
+
 model User {
   id               String            @id @default(uuid())
   name             String
   email            String            @unique
   password         String
-  role             String            @default("CANDIDATE")
+  role             Role              @default(CANDIDATE)
   createdAt        DateTime          @default(now())
   candidateProfile CandidateProfile?
   recruiterProfile Recruiter?
@@ -26,7 +32,7 @@ model CandidateProfile {
   experience   String?       // JSON string
   education    String?       // JSON string
   location     String?
-  skills       String?       // Comma-separated list of skills
+  skills       String[]      // Postgres array of strings
   linkedin     String?
   github       String?
   portfolio    String?
@@ -59,13 +65,13 @@ model Job {
   id             String        @id @default(uuid())
   title          String
   description    String
-  requirements   String        // JSON string representation of requirements array
-  skills         String        // JSON string representation of skills array
-  experience     String
+  requirements   String[]      // Postgres array of strings
+  skills         String[]      // Required skills
+  experience     String        // e.g. "2+ years", "5-7 years"
   location       String
   salary         String
-  employmentType String
-  workplaceType  String        @default("Onsite")
+  employmentType String        // e.g. "Full-time", "Contract", "Part-time"
+  workplaceType  String        @default("Onsite") // Onsite, Hybrid, Remote
   createdById    String
   companyId      String
   company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -80,8 +86,8 @@ model Application {
   jobId       String
   job         Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
   resumeUrl   String?
-  resumeText  String?
-  status      String            @default("PENDING")
+  resumeText  String?           // Extracted raw text from resume
+  status      String            @default("PENDING") // PENDING, SCREENING, SHORTLISTED, REJECTED
   matchScore  Int               @default(0)
   summary     String?
   createdAt   DateTime          @default(now())
@@ -93,12 +99,12 @@ model AIAnalysis {
   applicationId  String      @unique
   application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   score          Int
-  strengths      String      // JSON string representation of strengths array
-  weaknesses     String      // JSON string representation of weaknesses array
-  missingSkills  String      // JSON string representation of missingSkills array
+  strengths      String[]
+  weaknesses     String[]
+  missingSkills  String[]
   recommendation String
   atsScore       Int
-  questions      String      // JSON string representation of questions array
-  jsonResponse   String
+  questions      String[]
+  jsonResponse   String      // The full raw JSON returned from the model
   createdAt      DateTime    @default(now())
 }

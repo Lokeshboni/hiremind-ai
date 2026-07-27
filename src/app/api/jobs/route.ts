@@ -26,12 +26,11 @@ export async function GET(req: Request) {
 
     const whereClause: any = {};
 
-    // Search query matches title or skills
     if (search) {
       whereClause.OR = [
-        { title: { contains: search } },
-        { skills: { contains: search } },
-        { description: { contains: search } }
+        { title: { contains: search, mode: 'insensitive' } },
+        { skills: { hasSome: [search] } },
+        { description: { contains: search, mode: 'insensitive' } }
       ];
     }
 
@@ -47,13 +46,17 @@ export async function GET(req: Request) {
       whereClause.employmentType = employmentType;
     }
 
-    const parsedJobs = jobs.map(job => ({
-      ...job,
-      requirements: job.requirements ? JSON.parse(job.requirements) : [],
-      skills: job.skills ? JSON.parse(job.skills) : []
-    }));
+    const jobs = await prisma.job.findMany({
+      where: whereClause,
+      include: {
+        company: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
-    return NextResponse.json({ jobs: parsedJobs });
+    return NextResponse.json({ jobs });
   } catch (error) {
     console.error('Fetch Jobs Error:', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
@@ -80,7 +83,6 @@ export async function POST(req: Request) {
 
     const { title, description, requirements, skills, experience, location, salary, employmentType, workplaceType } = result.data;
 
-    // Retrieve the Recruiter profile to find their company
     const recruiter = await prisma.recruiter.findUnique({
       where: { userId: session.user.id },
     });
@@ -96,8 +98,8 @@ export async function POST(req: Request) {
       data: {
         title,
         description,
-        requirements: JSON.stringify(requirements),
-        skills: JSON.stringify(skills),
+        requirements,
+        skills,
         experience,
         location,
         salary,
@@ -111,13 +113,7 @@ export async function POST(req: Request) {
       }
     });
 
-    const parsedJob = {
-      ...job,
-      requirements: job.requirements ? JSON.parse(job.requirements) : [],
-      skills: job.skills ? JSON.parse(job.skills) : []
-    };
-
-    return NextResponse.json({ message: 'Job vacancy published successfully.', job: parsedJob }, { status: 201 });
+    return NextResponse.json({ message: 'Job vacancy published successfully.', job }, { status: 201 });
   } catch (error) {
     console.error('Create Job Error:', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
