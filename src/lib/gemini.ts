@@ -1,14 +1,19 @@
 import { GoogleGenAI } from '@google/genai';
 
-const apiKey = process.env.GEMINI_API_KEY;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const groqApiKey = process.env.GROQ_API_KEY;
 
-// Initialize the Gemini API client safely
+const hasGroq = !!groqApiKey;
+
+// Initialize the Gemini client safely if key is present
 const getGeminiClient = () => {
-  if (!apiKey) {
-    console.warn("GEMINI_API_KEY is not set in environment variables. AI features will fallback to mock data.");
+  if (!geminiApiKey) {
+    if (!hasGroq) {
+      console.warn("Neither GEMINI_API_KEY nor GROQ_API_KEY is set in environment variables. AI features will fallback to mock data.");
+    }
     return null;
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: geminiApiKey });
 };
 
 export interface ParsedResume {
@@ -55,8 +60,81 @@ export interface MatchAnalysis {
 }
 
 export async function parseResume(resumeText: string): Promise<ParsedResume> {
+  // If GROQ is available, use GROQ API with Llama 3
+  if (hasGroq) {
+    try {
+      console.log("Routing resume parsing to Groq API...");
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an expert AI Resume Parser. Read the following resume text and extract the details into a structured JSON format matching the schema requested. ONLY return valid JSON. Do not explain anything. Do not wrap in markdown blocks like ```json.'
+            },
+            {
+              role: 'user',
+              content: `Schema:
+{
+  "name": "string (Candidate Full Name)",
+  "email": "string (Email Address)",
+  "phone": "string (Phone Number)",
+  "headline": "string (Professional headline / summary)",
+  "skills": ["string (Technical/soft skills list)"],
+  "experience": [
+    {
+      "company": "string",
+      "role": "string",
+      "duration": "string",
+      "description": "string"
+    }
+  ],
+  "education": [
+    {
+      "institution": "string",
+      "degree": "string",
+      "year": "string"
+    }
+  ],
+  "projects": [
+    {
+      "name": "string",
+      "description": "string",
+      "technologies": ["string"]
+    }
+  ],
+  "certifications": ["string"]
+}
+
+Resume Text:
+${resumeText}`
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Groq API status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices[0].message.content?.trim() || '{}';
+      return JSON.parse(text) as ParsedResume;
+    } catch (error) {
+      console.error("Groq Parse Resume Error, falling back to mock:", error);
+      return getMockParsedResume();
+    }
+  }
+
+  // Gemini Fallback
   const ai = getGeminiClient();
-  
   if (!ai) {
     return getMockParsedResume();
   }
@@ -77,8 +155,8 @@ Schema:
     {
       "company": "string",
       "role": "string",
-      "duration": "string (e.g. 2021 - Present or Jan 2020 - Dec 2022)",
-      "description": "string (responsibilities and achievements)"
+      "duration": "string",
+      "description": "string"
     }
   ],
   "education": [
@@ -119,8 +197,89 @@ ${resumeText}
 }
 
 export async function matchResumeAndJob(resumeText: string, jobDescription: string): Promise<MatchAnalysis> {
-  const ai = getGeminiClient();
+  // If GROQ is available, use GROQ API with Llama 3
+  if (hasGroq) {
+    try {
+      console.log("Routing resume match evaluation to Groq API...");
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a Senior Technical Recruiter and AI ATS screener. Compare the Candidate\'s Resume against the Job Description and perform an match evaluation. ONLY return valid JSON matching the schema. Do not explain anything. Do not wrap in markdown blocks.'
+            },
+            {
+              role: 'user',
+              content: `Schema:
+{
+  "score": "integer (0-100 overall score)",
+  "skillsMatched": ["string (matching skills)"],
+  "missingSkills": ["string (required missing skills)"],
+  "experienceFit": "string (evaluation of experience)",
+  "educationFit": "string (evaluation of academic qualifications)",
+  "atsScore": "integer (0-100 ATS compatibility score)",
+  "strengths": ["string (strengths list)"],
+  "weaknesses": ["string (gaps list)"],
+  "recommendation": "string (STRONG_BUY, BUY, SHORTLIST, REJECT)",
+  "summary": "string (2-sentence overview)",
+  "interviewQuestions": ["string (3-5 situational/technical interview questions)"],
+  "resumeRewriteSuggestions": ["string (2-3 concrete tips)"],
+  "skillGapAnalysis": "string (missing skills evaluation)",
+  "careerRecommendation": "string (career trajectory match description)",
+  "recruiterNotes": "string (notes summary for recruiter)"
+}
 
+Job Description:
+${jobDescription}
+
+Candidate Resume Text:
+${resumeText}`
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Groq API status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices[0].message.content?.trim() || '{}';
+      const parsed = JSON.parse(text);
+      
+      return {
+        score: Number(parsed.score ?? 0),
+        skillsMatched: parsed.skillsMatched ?? [],
+        missingSkills: parsed.missingSkills ?? [],
+        experienceFit: parsed.experienceFit ?? '',
+        educationFit: parsed.educationFit ?? '',
+        atsScore: Number(parsed.atsScore ?? 0),
+        strengths: parsed.strengths ?? [],
+        weaknesses: parsed.weaknesses ?? [],
+        recommendation: parsed.recommendation ?? 'SHORTLIST',
+        summary: parsed.summary ?? '',
+        interviewQuestions: parsed.interviewQuestions ?? parsed.questions ?? [],
+        resumeRewriteSuggestions: parsed.resumeRewriteSuggestions ?? parsed.suggestions ?? [],
+        skillGapAnalysis: parsed.skillGapAnalysis ?? '',
+        careerRecommendation: parsed.careerRecommendation ?? '',
+        recruiterNotes: parsed.recruiterNotes ?? ''
+      };
+    } catch (error) {
+      console.error("Groq Match Analysis Error, falling back to mock:", error);
+      return getMockMatchAnalysis();
+    }
+  }
+
+  // Gemini Fallback
+  const ai = getGeminiClient();
   if (!ai) {
     return getMockMatchAnalysis();
   }
@@ -172,7 +331,6 @@ ${resumeText}
   }
 }
 
-// Fallback Mock Parsed Resume if Gemini API is unavailable or errors out
 function getMockParsedResume(): ParsedResume {
   return {
     name: "Alex Mercer",
@@ -212,7 +370,6 @@ function getMockParsedResume(): ParsedResume {
   };
 }
 
-// Fallback Mock Match Analysis if Gemini API is unavailable or errors out
 function getMockMatchAnalysis(): MatchAnalysis {
   return {
     score: 82,
