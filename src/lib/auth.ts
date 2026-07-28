@@ -1,3 +1,7 @@
+if (process.env.NEXTAUTH_URL === '') {
+  delete process.env.NEXTAUTH_URL;
+}
+
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from './prisma';
