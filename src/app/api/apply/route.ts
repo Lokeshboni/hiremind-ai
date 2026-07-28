@@ -6,8 +6,9 @@ import { matchResumeAndJob } from '@/lib/gemini';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
+import { getUploadDir, getResumeFilePath } from '@/lib/storage';
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'resumes');
+const UPLOAD_DIR = getUploadDir();
 
 // GET: Retrieve a single application detailed AI evaluation report
 export async function GET(req: Request) {
@@ -139,8 +140,8 @@ export async function POST(req: Request) {
       }
 
       try {
-        const localPath = path.join(process.cwd(), 'public', resumeUrl);
-        if (fs.existsSync(localPath)) {
+        const localPath = getResumeFilePath(resumeUrl);
+        if (localPath && fs.existsSync(localPath)) {
           const buffer = fs.readFileSync(localPath);
           const ext = path.extname(resumeUrl).toLowerCase();
           const mime = ext === '.pdf' ? 'application/pdf' : ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'text/plain';

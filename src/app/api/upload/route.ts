@@ -6,9 +6,10 @@ import { parseResume } from '@/lib/gemini';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
+import { getUploadDir } from '@/lib/storage';
 
 // Define the public directory for saving resume uploads locally
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'resumes');
+const UPLOAD_DIR = getUploadDir();
 
 export async function POST(req: Request) {
   try {
